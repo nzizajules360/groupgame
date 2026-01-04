@@ -14,6 +14,7 @@ interface TeamAnswerWithTimerProps {
   timeLeft?: number;
   teammates: { userId: number; username: string }[];
   currentUserId?: number;
+  currentTeam?: string;
   onSubmit: (answer: string) => void;
   onSelectPlayer: (playerId: number) => void;
   disabled?: boolean;
@@ -27,6 +28,7 @@ export function TeamAnswerWithTimer({
   timeLeft,
   teammates,
   currentUserId,
+  currentTeam,
   onSubmit,
   onSelectPlayer,
   disabled,
@@ -59,6 +61,8 @@ export function TeamAnswerWithTimer({
   };
 
   const isMyTurn = canAnswer && selectedPlayerId === currentUserId;
+  const isOpposingTeam = currentTeam && currentTeam !== authorTeam && currentTeam !== 'spectator';
+  const showPlayerSelection = isOpposingTeam && !selectedPlayerId;
 
   return (
     <Card className="bg-card/40 border-white/10">
@@ -78,7 +82,7 @@ export function TeamAnswerWithTimer({
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground">{question}</p>
 
-        {canAnswer && !selectedPlayerId && (
+        {showPlayerSelection ? (
           <div>
             <p className="text-xs text-muted-foreground mb-2">Select a player to answer:</p>
             <div className="flex flex-wrap gap-2">
@@ -100,9 +104,7 @@ export function TeamAnswerWithTimer({
               ))}
             </div>
           </div>
-        )}
-
-        {selectedPlayerId && (
+        ) : selectedPlayerId ? (
           <div className="space-y-2">
             <p className="text-xs text-muted-foreground">
               Selected: {teammates.find(t => t.userId === selectedPlayerId)?.username || 'Unknown'}
@@ -124,9 +126,7 @@ export function TeamAnswerWithTimer({
               <p className="text-xs text-muted-foreground italic">Waiting for selected player to answer...</p>
             )}
           </div>
-        )}
-
-        {!canAnswer && (
+        ) : (
           <p className="text-xs text-muted-foreground italic">Waiting for the other team to select a player...</p>
         )}
       </CardContent>

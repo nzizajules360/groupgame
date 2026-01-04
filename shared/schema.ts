@@ -123,7 +123,7 @@ export type Question = typeof questions.$inferSelect;
 export type CreateUserRequest = InsertUser;
 export type LoginRequest = Pick<InsertUser, "username" | "password">;
 
-export type CreateRoomRequest = { name?: string }; // just need host logic on server
+export type CreateRoomRequest = { name?: string }; // optional name for the room
 export type JoinRoomRequest = { code: string };
 
 export type UpdateRoomRequest = Partial<Room>;

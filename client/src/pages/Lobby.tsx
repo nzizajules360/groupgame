@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { LogOut, Plus, Users, Trophy, ChevronRight } from "lucide-react";
+import { LogOut, Plus, Users, Trophy, ChevronRight, User } from "lucide-react";
 import { useState } from "react";
 import { useLocation } from "wouter";
 
@@ -32,14 +32,24 @@ export default function LobbyPage() {
             <p className="text-xs text-muted-foreground">Welcome back, {user.username}</p>
           </div>
         </div>
-        <Button 
-          variant="ghost" 
-          size="sm" 
-          onClick={() => logout.mutate()}
-          className="text-muted-foreground hover:text-white"
-        >
-          <LogOut className="w-4 h-4 mr-2" /> Logout
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={() => setLocation(`/profile/${user.username}`)}
+            className="text-muted-foreground hover:text-white"
+          >
+            <User className="w-4 h-4 mr-2" /> Profile
+          </Button>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={() => logout.mutate()}
+            className="text-muted-foreground hover:text-white"
+          >
+            <LogOut className="w-4 h-4" />
+          </Button>
+        </div>
       </header>
 
       {/* Main Content */}

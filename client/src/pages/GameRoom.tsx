@@ -17,7 +17,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
-import { Copy, Shield, Trophy, Users, AlertCircle, PlayCircle } from "lucide-react";
+import { Copy, Shield, Trophy, Users, AlertCircle, PlayCircle, User } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 // Animation for winning
@@ -90,7 +90,8 @@ export default function GameRoom() {
   useEffect(() => {
     const handleQuestionState = (e: CustomEvent<{ roomId: number; question: string; authorTeam: 'red' | 'blue'; canAnswer: boolean; selectedPlayerId?: number; timeLeft?: number }>) => {
       if (e.detail.roomId === roomId) {
-        setCurrentQuestion({ question: e.detail.question, authorTeam: e.detail.authorTeam, canAnswer: e.detail.canAnswer, selectedPlayerId: e.detail.selectedPlayerId, timeLeft: e.detail.timeLeft });
+        // Always set currentQuestion, but only allow answering if canAnswer and not the author team
+        setCurrentQuestion({ question: e.detail.question, authorTeam: e.detail.authorTeam, canAnswer: e.detail.canAnswer && team !== e.detail.authorTeam, selectedPlayerId: e.detail.selectedPlayerId, timeLeft: e.detail.timeLeft });
       }
     };
     const handleAnswerResult = (e: CustomEvent<{ roomId: number; correct: boolean; answeringTeam: 'red' | 'blue'; question: string; answer?: string }>) => {
@@ -171,9 +172,19 @@ export default function GameRoom() {
             <div className={`w-2 h-2 rounded-full ${isConnected ? "bg-green-500 animate-pulse" : "bg-red-500"}`} />
             {isConnected ? "Connected" : "Reconnecting..."}
           </div>
-          <Avatar className="w-8 h-8 border border-white/10">
-            <AvatarFallback className="bg-primary/20 text-primary text-xs">{user.username.substring(0,2).toUpperCase()}</AvatarFallback>
-          </Avatar>
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={() => setLocation(`/profile/${user?.username}`)}
+              className="text-muted-foreground hover:text-white"
+            >
+              <User className="w-4 h-4 mr-2" /> Profile
+            </Button>
+            <Avatar className="w-8 h-8 border border-white/10">
+              <AvatarFallback className="bg-primary/20 text-primary text-xs">{user.username.substring(0,2).toUpperCase()}</AvatarFallback>
+            </Avatar>
+          </div>
         </div>
       </header>
 
@@ -326,6 +337,7 @@ export default function GameRoom() {
                     timeLeft={currentQuestion.timeLeft}
                     teammates={room.users?.filter(u => u.team === team && u.team !== 'spectator').map(u => ({ userId: u.userId, username: u.user.username })) || []}
                     currentUserId={user?.id}
+                    currentTeam={team}
                     onSubmit={handleAnswerSubmit}
                     onSelectPlayer={handleSelectPlayer}
                   />

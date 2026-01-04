@@ -164,13 +164,13 @@ export async function registerRoutes(
           await storage.clearTeamQuestionForRoom(roomId);
           const q = await storage.createTeamQuestion(roomId, message.question, message.answer, team as 'red' | 'blue');
 
-          // Broadcast question state: author team sees question+answer; opposing team sees only question and can answer
+          // Broadcast question state: author team sees question+answer; opposing team sees only question and can select a player
           broadcast(roomId, {
             type: "question_state",
             roomId,
             question: q.text,
             authorTeam: team as 'red' | 'blue',
-            canAnswer: false, // author team cannot answer
+            canAnswer: false, // no one can answer yet until a player is selected
           });
         }
 

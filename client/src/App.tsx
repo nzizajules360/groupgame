@@ -7,6 +7,7 @@ import NotFound from "@/pages/not-found";
 import AuthPage from "@/pages/Auth";
 import LobbyPage from "@/pages/Lobby";
 import GameRoom from "@/pages/GameRoom";
+import ProfilePage from "@/pages/Profile";
 
 // Wrap Route components to check protected status if needed
 // For now, pages handle their own redirects via useAuth
@@ -18,6 +19,7 @@ function Router() {
       <Route path="/auth" component={AuthPage} />
       <Route path="/lobby" component={LobbyPage} />
       <Route path="/game/:id" component={GameRoom} />
+      <Route path="/profile/:username?" component={ProfilePage} />
       <Route component={NotFound} />
     </Switch>
   );
