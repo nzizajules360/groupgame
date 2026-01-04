@@ -153,10 +153,18 @@ export type AnswerQuestionWS = {
   answer: string;
 };
 
+export type SelectPlayerWS = {
+  type: 'select_player';
+  roomId: number;
+  playerId: number;
+};
+
 export type QuestionStateWS = {
   type: 'question_state';
   roomId: number;
   question: string;
   authorTeam: 'red' | 'blue';
   canAnswer: boolean; // true for opposing team
+  selectedPlayerId?: number; // player chosen to answer
+  timeLeft?: number; // seconds remaining
 };

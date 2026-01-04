@@ -11,8 +11,9 @@ type WSMessage =
   | { type: 'game_update'; roomId: number }
   | { type: 'wrong_answer'; team: string; userId: number }
   | { type: 'submit_team_question'; roomId: number; question: string; answer: string }
+  | { type: 'select_player'; roomId: number; playerId: number }
   | { type: 'answer_question'; roomId: number; answer: string }
-  | { type: 'question_state'; roomId: number; question: string; authorTeam: 'red' | 'blue'; canAnswer: boolean }
+  | { type: 'question_state'; roomId: number; question: string; authorTeam: 'red' | 'blue'; canAnswer: boolean; selectedPlayerId?: number; timeLeft?: number }
   | { type: 'answer_result'; roomId: number; correct: boolean; answeringTeam: 'red' | 'blue'; question: string; answer?: string }
   | { type: 'error'; message: string };
 

@@ -174,6 +174,37 @@ export async function registerRoutes(
           });
         }
 
+        if (message.type === "select_player") {
+          if (!currentClient) return;
+
+          const { roomId, userId } = currentClient;
+          const roomUsers = await storage.getRoomUsers(roomId);
+          const roomUser = roomUsers.find(u => u.userId === userId);
+          const team = roomUser?.team;
+          if (!team || team === "spectator") return;
+
+          const q = await storage.getTeamQuestionForRoom(roomId);
+          if (!q) return;
+
+          const opposingTeam = q.authorTeam === 'red' ? 'blue' : 'red';
+          if (team !== opposingTeam) {
+            ws.send(JSON.stringify({ type: "error", message: "Only the opposing team can select a player to answer." }));
+            return;
+          }
+
+          // Broadcast that a player was selected and start the timer
+          broadcast(roomId, {
+            type: "question_state",
+            roomId,
+            question: q.text,
+            authorTeam: q.authorTeam,
+            canAnswer: true,
+            selectedPlayerId: message.playerId,
+            timeLeft: 20,
+          });
+          startAnswerTimer(roomId, opposingTeam);
+        }
+
         if (message.type === "answer_question") {
           if (!currentClient) return;
 
@@ -193,6 +224,9 @@ export async function registerRoutes(
             ws.send(JSON.stringify({ type: "error", message: "It's not your team's turn to answer!" }));
             return;
           }
+
+          // Clear timer on answer
+          clearTimer(roomId);
 
           if (isCorrect) {
             // Update scores
@@ -236,6 +270,36 @@ export async function registerRoutes(
       currentClient = null;
     });
   });
+
+  // Track active question timers per room
+  const activeTimers = new Map<number, NodeJS.Timeout>();
+
+  function clearTimer(roomId: number) {
+    const timer = activeTimers.get(roomId);
+    if (timer) {
+      clearTimeout(timer);
+      activeTimers.delete(roomId);
+    }
+  }
+
+  function startAnswerTimer(roomId: number, answeringTeam: 'red' | 'blue') {
+    clearTimer(roomId);
+    let timeLeft = 20;
+    const timer = setInterval(() => {
+      timeLeft -= 1;
+      broadcast(roomId, { type: "question_state", roomId, question: "", authorTeam: answeringTeam, canAnswer: true, timeLeft });
+      if (timeLeft <= 0) {
+        clearInterval(timer);
+        activeTimers.delete(roomId);
+        // Auto-fail
+        broadcast(roomId, { type: "answer_result", roomId, correct: false, answeringTeam, question: "" });
+        broadcast(roomId, { type: "wrong_answer", team: answeringTeam, userId: 0 });
+        // Clear the question
+        storage.clearTeamQuestionForRoom(roomId);
+      }
+    }, 1000);
+    activeTimers.set(roomId, timer);
+  }
 
   function broadcast(roomId: number, message: any) {
     const payload = JSON.stringify(message);
