@@ -53,6 +53,9 @@ export const questions = pgTable("questions", {
   answer: text("answer").notNull(),
   category: text("category").default("general"),
   difficulty: text("difficulty").default("medium"),
+  roomId: integer("room_id"), // optional: if set, this is a team-authored question
+  authorTeam: text("author_team"), // 'red' | 'blue' | null
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 // === RELATIONS ===
@@ -68,6 +71,7 @@ export const roomsRelations = relations(rooms, ({ one, many }) => ({
   }),
   users: many(roomUsers),
   messages: many(messages),
+  questions: many(questions),
 }));
 
 export const roomUsersRelations = relations(roomUsers, ({ one }) => ({
@@ -89,6 +93,13 @@ export const messagesRelations = relations(messages, ({ one }) => ({
   user: one(users, {
     fields: [messages.userId],
     references: [users.id],
+  }),
+}));
+
+export const questionsRelations = relations(questions, ({ one }) => ({
+  room: one(rooms, {
+    fields: [questions.roomId],
+    references: [rooms.id],
   }),
 }));
 
@@ -118,11 +129,34 @@ export type JoinRoomRequest = { code: string };
 export type UpdateRoomRequest = Partial<Room>;
 export type UpdateTeamRequest = { team: "red" | "blue" | "spectator" };
 
-export type SendMessageRequest = { content: string; team?: "red" | "blue" };
+export type CreateTeamQuestionRequest = {
+  roomId: number;
+  question: string;
+  answer: string;
+};
 
-// Game State Types for WS
-export interface GameState {
-  room: Room;
-  users: (RoomUser & { user: User })[];
-  messages: (Message & { username: string })[];
-}
+export type AnswerQuestionRequest = {
+  roomId: number;
+  answer: string;
+};
+
+export type SubmitTeamQuestionWS = {
+  type: 'submit_team_question';
+  roomId: number;
+  question: string;
+  answer: string;
+};
+
+export type AnswerQuestionWS = {
+  type: 'answer_question';
+  roomId: number;
+  answer: string;
+};
+
+export type QuestionStateWS = {
+  type: 'question_state';
+  roomId: number;
+  question: string;
+  authorTeam: 'red' | 'blue';
+  canAnswer: boolean; // true for opposing team
+};

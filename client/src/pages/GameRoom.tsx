@@ -5,6 +5,9 @@ import { useRoom, useRoomMessages } from "@/hooks/use-game";
 import { useWebSocket } from "@/hooks/use-websocket";
 import { ChatPanel } from "@/components/chat-panel";
 import { GameWheel } from "@/components/game-wheel";
+import { WrongAnswerAnimation } from "@/components/wrong-answer-animation";
+import { TeamQuestionSetter } from "@/components/team-question-setter";
+import { TeamAnswer } from "@/components/team-answer";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -30,6 +33,7 @@ export default function GameRoom() {
   const { toast } = useToast();
 
   const [hasShownWelcome, setHasShownWelcome] = useState(false);
+  const [currentQuestion, setCurrentQuestion] = useState<{ question: string; authorTeam: 'red' | 'blue'; canAnswer: boolean } | null>(null);
 
   // Derived state
   const isHost = room && user ? room.hostId === user.id : false;
@@ -62,6 +66,44 @@ export default function GameRoom() {
     }
   };
 
+  const handleWrongAnswer = () => {
+    send({ type: 'wrong_answer' });
+    toast({ title: "Wrong Answer!", description: "Your team will see the animation." });
+  };
+
+  const handleTeamQuestionSubmit = (question: string, answer: string) => {
+    send({ type: 'submit_team_question', roomId, question, answer });
+    toast({ title: "Question submitted!", description: "The other team can now answer." });
+  };
+
+  const handleAnswerSubmit = (answer: string) => {
+    send({ type: 'answer_question', roomId, answer });
+  };
+
+  // Listen for question_state and answer_result WS events
+  useEffect(() => {
+    const handleQuestionState = (e: CustomEvent<{ roomId: number; question: string; authorTeam: 'red' | 'blue'; canAnswer: boolean }>) => {
+      if (e.detail.roomId === roomId) {
+        setCurrentQuestion({ question: e.detail.question, authorTeam: e.detail.authorTeam, canAnswer: e.detail.canAnswer });
+      }
+    };
+    const handleAnswerResult = (e: CustomEvent<{ roomId: number; correct: boolean; answeringTeam: 'red' | 'blue'; question: string; answer?: string }>) => {
+      if (e.detail.roomId === roomId) {
+        setCurrentQuestion(null);
+        toast({
+          title: e.detail.correct ? "Correct!" : "Wrong!",
+          description: e.detail.correct ? `${e.detail.answeringTeam} team scored!` : "Try the next question.",
+        });
+      }
+    };
+    window.addEventListener("question_state", handleQuestionState as EventListener);
+    window.addEventListener("answer_result", handleAnswerResult as EventListener);
+    return () => {
+      window.removeEventListener("question_state", handleQuestionState as EventListener);
+      window.removeEventListener("answer_result", handleAnswerResult as EventListener);
+    };
+  }, [roomId, toast]);
+
   if (roomLoading || !room) {
     return (
       <div className="h-screen w-full flex items-center justify-center bg-background">
@@ -80,6 +122,12 @@ export default function GameRoom() {
 
   return (
     <div className="h-screen w-full flex flex-col overflow-hidden bg-background relative">
+      {/* Wrong Answer Animation Overlay */}
+      <WrongAnswerAnimation currentTeam={team} onWrongAnswer={(detail) => {
+        // Optional: you can log or handle the event here
+        console.log("Wrong answer for team:", detail.team, "by user:", detail.userId);
+      }} />
+
       {/* Background Ambience */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,_var(--tw-gradient-stops))] from-indigo-950/30 via-background to-background pointer-events-none" />
 
@@ -248,39 +296,22 @@ export default function GameRoom() {
               </div>
             )}
 
-            {/* PLAYING STATE - Demo Wheel */}
+            {/* PLAYING STATE */}
             {room.status === 'playing' && (
               <div className="flex flex-col items-center gap-8 w-full max-w-2xl">
-                <GameWheel 
-                  options={["History", "Science", "Pop Culture", "Geography", "Sports", "Art"]}
-                  onSpinEnd={(res) => {
-                    toast({ 
-                      title: "Topic Selected!", 
-                      description: `The wheel landed on: ${res}`,
-                      className: "bg-primary text-white border-none"
-                    });
-                    // Demo confetti
-                    confetti({
-                      particleCount: 100,
-                      spread: 70,
-                      origin: { y: 0.6 }
-                    });
-                  }} 
-                />
-                
-                <Card className="w-full bg-black/40 border-white/10 backdrop-blur-md">
-                   <div className="p-6 text-center space-y-4">
-                     <p className="text-sm text-muted-foreground uppercase tracking-widest">Current Question</p>
-                     <p className="text-2xl font-medium">Which planet in our solar system is known as the Red Planet?</p>
-                     
-                     <div className="grid grid-cols-2 gap-4 mt-8">
-                       <Button variant="outline" className="h-16 text-lg hover:bg-white/10 hover:border-white/20">Venus</Button>
-                       <Button variant="outline" className="h-16 text-lg hover:bg-white/10 hover:border-white/20">Mars</Button>
-                       <Button variant="outline" className="h-16 text-lg hover:bg-white/10 hover:border-white/20">Jupiter</Button>
-                       <Button variant="outline" className="h-16 text-lg hover:bg-white/10 hover:border-white/20">Saturn</Button>
-                     </div>
-                   </div>
-                </Card>
+                {currentQuestion ? (
+                  <TeamAnswer
+                    question={currentQuestion.question}
+                    authorTeam={currentQuestion.authorTeam}
+                    canAnswer={currentQuestion.canAnswer && team !== currentQuestion.authorTeam && team !== 'spectator'}
+                    onSubmit={handleAnswerSubmit}
+                  />
+                ) : (
+                  <TeamQuestionSetter
+                    currentTeam={team}
+                    onSubmit={handleTeamQuestionSubmit}
+                  />
+                )}
               </div>
             )}
             

@@ -87,7 +87,8 @@ export async function registerRoutes(
           if (!currentClient) return;
           
           const dbMsg = await storage.createMessage(currentClient.roomId, currentClient.userId, message.content, "chat", message.team);
-          broadcast(currentClient.roomId, { type: "chat", message: { ...dbMsg, username: "User" } }); // Ideally fetch username
+          const sender = await storage.getUser(currentClient.userId);
+          broadcast(currentClient.roomId, { type: "chat", message: { ...dbMsg, username: sender?.username || "User" } });
         }
 
         if (message.type === "team_change") {
@@ -136,6 +137,92 @@ export async function registerRoutes(
           }
 
           broadcast(currentClient.roomId, { type: "game_update", roomId: currentClient.roomId });
+        }
+
+        if (message.type === "wrong_answer") {
+          if (!currentClient) return;
+
+          const { roomId, userId } = currentClient;
+          const roomUsers = await storage.getRoomUsers(roomId);
+          const roomUser = roomUsers.find(u => u.userId === userId);
+          const team = roomUser?.team;
+          if (!team || team === "spectator") return;
+
+          broadcast(roomId, { type: "wrong_answer", team, userId });
+        }
+
+        if (message.type === "submit_team_question") {
+          if (!currentClient) return;
+
+          const { roomId, userId } = currentClient;
+          const roomUsers = await storage.getRoomUsers(roomId);
+          const roomUser = roomUsers.find(u => u.userId === userId);
+          const team = roomUser?.team;
+          if (!team || team === "spectator") return;
+
+          // Clear any previous team question for this room
+          await storage.clearTeamQuestionForRoom(roomId);
+          const q = await storage.createTeamQuestion(roomId, message.question, message.answer, team as 'red' | 'blue');
+
+          // Broadcast question state: author team sees question+answer; opposing team sees only question and can answer
+          broadcast(roomId, {
+            type: "question_state",
+            roomId,
+            question: q.text,
+            authorTeam: team as 'red' | 'blue',
+            canAnswer: false, // author team cannot answer
+          });
+        }
+
+        if (message.type === "answer_question") {
+          if (!currentClient) return;
+
+          const { roomId, userId } = currentClient;
+          const roomUsers = await storage.getRoomUsers(roomId);
+          const roomUser = roomUsers.find(u => u.userId === userId);
+          const answeringTeam = roomUser?.team;
+          if (!answeringTeam || answeringTeam === "spectator") return;
+
+          const q = await storage.getTeamQuestionForRoom(roomId);
+          if (!q) return;
+
+          const isCorrect = q.answer.trim().toLowerCase() === message.answer.trim().toLowerCase();
+          const opposingTeam = q.authorTeam === 'red' ? 'blue' : 'red';
+
+          if (answeringTeam !== opposingTeam) {
+            ws.send(JSON.stringify({ type: "error", message: "It's not your team's turn to answer!" }));
+            return;
+          }
+
+          if (isCorrect) {
+            // Update scores
+            const room = await storage.getRoom(roomId);
+            if (!room) return;
+            const scoreField = answeringTeam === 'red' ? 'redScore' : 'blueScore';
+            await storage.updateRoom(roomId, { [scoreField]: (room as any)[scoreField] + 1 });
+
+            // Clear the question
+            await storage.clearTeamQuestionForRoom(roomId);
+
+            broadcast(roomId, {
+              type: "answer_result",
+              roomId,
+              correct: true,
+              answeringTeam,
+              question: q.text,
+              answer: q.answer,
+            });
+            broadcast(roomId, { type: "game_update", roomId });
+          } else {
+            broadcast(roomId, {
+              type: "answer_result",
+              roomId,
+              correct: false,
+              answeringTeam,
+              question: q.text,
+            });
+            broadcast(roomId, { type: "wrong_answer", team: answeringTeam, userId });
+          }
         }
 
       } catch (e) {

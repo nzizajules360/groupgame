@@ -31,6 +31,9 @@ export interface IStorage {
   getQuestions(): Promise<Question[]>;
   createQuestion(question: { text: string; answer: string; category?: string; difficulty?: string }): Promise<Question>;
   getRandomQuestion(): Promise<Question | undefined>;
+  createTeamQuestion(roomId: number, question: string, answer: string, authorTeam: 'red' | 'blue'): Promise<Question>;
+  getTeamQuestionForRoom(roomId: number): Promise<Question | undefined>;
+  clearTeamQuestionForRoom(roomId: number): Promise<void>;
 
   sessionStore: session.Store;
 }
@@ -157,8 +160,27 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getRandomQuestion(): Promise<Question | undefined> {
-    const [q] = await db.select().from(questions).orderBy(sql`RANDOM()`).limit(1);
+    const [q] = await db.select().from(questions).where(sql`${questions.roomId} IS NULL`).orderBy(sql`RANDOM()`).limit(1);
     return q;
+  }
+
+  async createTeamQuestion(roomId: number, question: string, answer: string, authorTeam: 'red' | 'blue'): Promise<Question> {
+    const [q] = await db.insert(questions).values({
+      roomId,
+      text: question,
+      answer,
+      authorTeam,
+    }).returning();
+    return q;
+  }
+
+  async getTeamQuestionForRoom(roomId: number): Promise<Question | undefined> {
+    const [q] = await db.select().from(questions).where(eq(questions.roomId, roomId)).limit(1);
+    return q;
+  }
+
+  async clearTeamQuestionForRoom(roomId: number): Promise<void> {
+    await db.delete(questions).where(eq(questions.roomId, roomId));
   }
 }
 

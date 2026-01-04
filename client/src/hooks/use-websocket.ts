@@ -9,6 +9,11 @@ type WSMessage =
   | { type: 'chat'; content: string; team?: string }
   | { type: 'spin' }
   | { type: 'game_update'; roomId: number }
+  | { type: 'wrong_answer'; team: string; userId: number }
+  | { type: 'submit_team_question'; roomId: number; question: string; answer: string }
+  | { type: 'answer_question'; roomId: number; answer: string }
+  | { type: 'question_state'; roomId: number; question: string; authorTeam: 'red' | 'blue'; canAnswer: boolean }
+  | { type: 'answer_result'; roomId: number; correct: boolean; answeringTeam: 'red' | 'blue'; question: string; answer?: string }
   | { type: 'error'; message: string };
 
 export function useWebSocket(roomId: number) {
@@ -59,6 +64,15 @@ export function useWebSocket(roomId: number) {
               description: message.message, 
               variant: "destructive" 
             });
+            break;
+          case 'wrong_answer':
+            // Custom event will be handled by component
+            window.dispatchEvent(new CustomEvent('wrong_answer', { detail: message }));
+            break;
+          case 'question_state':
+          case 'answer_result':
+            // Invalidate room to trigger refetch for scores
+            queryClient.invalidateQueries({ queryKey: [api.rooms.get.path, roomId] });
             break;
         }
       } catch (err) {
