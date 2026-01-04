@@ -7,6 +7,7 @@ import { ChatPanel } from "@/components/chat-panel";
 import { GameWheel } from "@/components/game-wheel";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -44,10 +45,10 @@ export default function GameRoom() {
   // Handle Join on Load
   useEffect(() => {
     if (isConnected && room && !hasShownWelcome) {
-      send({ type: 'join_room', roomId });
+      send({ type: 'join_room', roomId, userId: user.id });
       setHasShownWelcome(true);
     }
-  }, [isConnected, room, hasShownWelcome, roomId, send]);
+  }, [isConnected, room, hasShownWelcome, roomId, send, user.id]);
 
   const handleTeamSwitch = (newTeam: "red" | "blue" | "spectator") => {
     if (newTeam === team) return;
@@ -188,7 +189,7 @@ export default function GameRoom() {
                 </div>
                 {team !== 'spectator' && (
                   <Button 
-                    variant="link" 
+                    variant="ghost" 
                     size="sm" 
                     className="text-xs text-muted-foreground p-0 h-auto"
                     onClick={() => handleTeamSwitch('spectator')}
@@ -233,8 +234,7 @@ export default function GameRoom() {
                     size="lg" 
                     className="text-xl px-12 py-8 rounded-2xl bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-600/90 shadow-[0_0_30px_rgba(124,58,237,0.3)] animate-pulse"
                     onClick={() => {
-                      send({ type: 'spin' }); // Just for demo, usually this sets status=playing
-                      // In a real app, you'd send a start_game event
+                      send({ type: 'start_game', roomId });
                       toast({ title: "Starting Game", description: "Let's go!" });
                     }}
                   >

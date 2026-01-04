@@ -74,7 +74,11 @@ export const api = {
       method: 'GET' as const,
       path: '/api/rooms/:id',
       responses: {
-        200: z.custom<typeof rooms.$inferSelect>(),
+        200: z.custom<
+          (typeof rooms.$inferSelect) & {
+            users: (typeof roomUsers.$inferSelect & { user: typeof users.$inferSelect })[];
+          }
+        >(),
         404: errorSchemas.notFound,
       },
     },
