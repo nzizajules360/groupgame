@@ -44,6 +44,13 @@ export const api = {
         200: z.void(),
       },
     },
+    delete: {
+      method: 'DELETE' as const,
+      path: '/api/user/delete',
+      responses: {
+        200: z.void(),
+      },
+    },
     me: {
       method: 'GET' as const,
       path: '/api/user',

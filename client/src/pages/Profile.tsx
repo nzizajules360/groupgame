@@ -1,20 +1,80 @@
-import { useRoute } from "wouter";
+import { useRoute, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
+import { useGame } from "@/hooks/use-game";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Trophy, Users, Calendar, Settings, LogOut } from "lucide-react";
+import { Trophy, Users, Calendar, Settings, LogOut, RefreshCw, Trash2, Home, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useState, useEffect } from "react";
 
 export default function ProfilePage() {
   const { user, logout } = useAuth();
+  const { createRoom } = useGame();
   const { toast } = useToast();
   const [, params] = useRoute("/profile/:username?");
+  const [, setLocation] = useLocation();
   const targetUsername = params?.username;
 
   const profileUser = targetUsername ? { username: targetUsername } : user;
   const isOwnProfile = !targetUsername || targetUsername === user?.username;
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+
+  // Fetch a random avatar on mount and allow refresh
+  const fetchRandomAvatar = async () => {
+    try {
+      const res = await fetch("https://avatar.iran.liara.run/public");
+      if (res.ok) {
+        const url = res.url;
+        setAvatarUrl(url);
+      } else {
+        // Fallback to default
+        setAvatarUrl(null);
+      }
+    } catch {
+      setAvatarUrl(null);
+    }
+  };
+
+  useEffect(() => {
+    fetchRandomAvatar();
+  }, []);
+
+  const handleRefreshAvatar = () => {
+    setAvatarUrl(null);
+    fetchRandomAvatar();
+    toast({ title: "Avatar refreshed", description: "A new random avatar has been loaded." });
+  };
+
+  const handleLogout = () => {
+    logout.mutate();
+    toast({ title: "Logged out", description: "You have been logged out." });
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!confirm("Are you sure you want to delete your account? This cannot be undone.")) return;
+    try {
+      const res = await fetch("/api/user/delete", { method: "DELETE", credentials: "include" });
+      if (res.ok) {
+        toast({ title: "Account deleted", description: "Your account has been permanently deleted." });
+        logout.mutate();
+        setLocation("/");
+      } else {
+        toast({ title: "Failed to delete", description: "Please try again.", variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "Error", description: "Something went wrong.", variant: "destructive" });
+    }
+  };
+
+  const handleHostGame = () => {
+    createRoom.mutate({ name: `${user?.username}'s Room` });
+  };
+
+  const handleGoHome = () => {
+    setLocation("/lobby");
+  };
 
   if (!profileUser) {
     return (
@@ -24,11 +84,6 @@ export default function ProfilePage() {
     );
   }
 
-  const handleLogout = () => {
-    logout.mutate();
-    toast({ title: "Logged out", description: "You have been logged out." });
-  };
-
   return (
     <div className="min-h-screen bg-background p-4 md:p-8">
       <div className="max-w-4xl mx-auto space-y-6">
@@ -36,9 +91,20 @@ export default function ProfilePage() {
         <header className="flex items-center justify-between">
           <h1 className="text-3xl font-bold">Profile</h1>
           {isOwnProfile && (
-            <Button variant="outline" onClick={handleLogout}>
-              <LogOut className="w-4 h-4 mr-2" /> Logout
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={handleHostGame} disabled={createRoom.isPending}>
+                <Plus className="w-4 h-4 mr-2" /> {createRoom.isPending ? "Creating..." : "Host Game"}
+              </Button>
+              <Button variant="outline" onClick={handleGoHome}>
+                <Home className="w-4 h-4 mr-2" /> Home
+              </Button>
+              <Button variant="destructive" onClick={handleDeleteAccount}>
+                <Trash2 className="w-4 h-4 mr-2" /> Delete Account
+              </Button>
+              <Button variant="outline" onClick={handleLogout}>
+                <LogOut className="w-4 h-4 mr-2" /> Logout
+              </Button>
+            </div>
           )}
         </header>
 
@@ -47,9 +113,13 @@ export default function ProfilePage() {
           <CardHeader>
             <div className="flex items-center gap-4">
               <Avatar className="w-20 h-20 border-4 border-primary/20">
-                <AvatarFallback className="text-3xl bg-primary/20 text-primary">
-                  {profileUser.username[0]?.toUpperCase()}
-                </AvatarFallback>
+                {avatarUrl ? (
+                  <AvatarImage src={avatarUrl} alt="Avatar" />
+                ) : (
+                  <AvatarFallback className="text-3xl bg-primary/20 text-primary animate-pulse">
+                    {profileUser.username[0]?.toUpperCase()}
+                  </AvatarFallback>
+                )}
               </Avatar>
               <div>
                 <CardTitle className="text-2xl">{profileUser.username}</CardTitle>
@@ -105,12 +175,21 @@ export default function ProfilePage() {
             <CardContent className="space-y-4">
               <div>
                 <p className="text-sm font-medium mb-2">Avatar</p>
-                <Avatar className="w-16 h-16">
-                  <AvatarFallback className="bg-primary/20 text-primary">
-                    {profileUser.username[0]?.toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-                <p className="text-xs text-muted-foreground mt-2">Default avatar generated from username.</p>
+                <div className="flex items-center gap-4">
+                  <Avatar className="w-16 h-16">
+                    {avatarUrl ? (
+                      <AvatarImage src={avatarUrl} alt="Avatar" />
+                    ) : (
+                      <AvatarFallback className="bg-primary/20 text-primary">
+                        {profileUser.username[0]?.toUpperCase()}
+                      </AvatarFallback>
+                    )}
+                  </Avatar>
+                  <Button variant="outline" size="sm" onClick={handleRefreshAvatar}>
+                    <RefreshCw className="w-4 h-4 mr-2" /> Random Avatar
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">Random avatar from external service.</p>
               </div>
               <div>
                 <p className="text-sm font-medium mb-2">Account</p>

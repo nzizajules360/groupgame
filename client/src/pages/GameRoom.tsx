@@ -9,9 +9,10 @@ import { WrongAnswerAnimation } from "@/components/wrong-answer-animation";
 import { TeamQuestionSetter } from "@/components/team-question-setter";
 import { TeamAnswerWithTimer } from "@/components/team-answer-with-timer";
 import { QuestionHistory } from "@/components/question-history";
+import { TeamSpinner } from "@/components/team-spinner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -36,6 +37,8 @@ export default function GameRoom() {
   const [hasShownWelcome, setHasShownWelcome] = useState(false);
   const [currentQuestion, setCurrentQuestion] = useState<{ question: string; authorTeam: 'red' | 'blue'; canAnswer: boolean; selectedPlayerId?: number; timeLeft?: number } | null>(null);
   const [questionHistory, setQuestionHistory] = useState<any[]>([]);
+  const [askingTeam, setAskingTeam] = useState<'red' | 'blue' | null>(null);
+  const [showSpinner, setShowSpinner] = useState(false);
 
   // Derived state
   const isHost = room && user ? room.hostId === user.id : false;
@@ -77,6 +80,12 @@ export default function GameRoom() {
     send({ type: 'select_player', roomId, playerId });
   };
 
+  const handleSpinComplete = (selectedTeam: 'red' | 'blue') => {
+    setAskingTeam(selectedTeam);
+    setShowSpinner(false);
+    toast({ title: "Team Selected", description: `${selectedTeam === 'red' ? 'Red' : 'Blue'} team will ask the first question.` });
+  };
+
   const handleTeamQuestionSubmit = (question: string, answer: string) => {
     send({ type: 'submit_team_question', roomId, question, answer });
     toast({ title: "Question submitted!", description: "The other team can now select a player to answer." });
@@ -90,7 +99,6 @@ export default function GameRoom() {
   useEffect(() => {
     const handleQuestionState = (e: CustomEvent<{ roomId: number; question: string; authorTeam: 'red' | 'blue'; canAnswer: boolean; selectedPlayerId?: number; timeLeft?: number }>) => {
       if (e.detail.roomId === roomId) {
-        // Always set currentQuestion, but only allow answering if canAnswer and not the author team
         setCurrentQuestion({ question: e.detail.question, authorTeam: e.detail.authorTeam, canAnswer: e.detail.canAnswer && team !== e.detail.authorTeam, selectedPlayerId: e.detail.selectedPlayerId, timeLeft: e.detail.timeLeft });
       }
     };
@@ -109,9 +117,11 @@ export default function GameRoom() {
         };
         setQuestionHistory(prev => [entry, ...prev].slice(0, 50)); // keep last 50
         setCurrentQuestion(null);
+        // Switch asking team for next round
+        setAskingTeam(e.detail.answeringTeam === 'red' ? 'blue' : 'red');
         toast({
           title: e.detail.correct ? "Correct!" : "Wrong!",
-          description: e.detail.correct ? `${e.detail.answeringTeam} team scored!` : "Try next question.",
+          description: e.detail.correct ? `${e.detail.answeringTeam} team scored! Now it's ${e.detail.answeringTeam === 'red' ? 'Blue' : 'Red'}'s turn to ask.` : `Try next question.`,
         });
       }
     };
@@ -121,7 +131,7 @@ export default function GameRoom() {
       window.removeEventListener("question_state", handleQuestionState as EventListener);
       window.removeEventListener("answer_result", handleAnswerResult as EventListener);
     };
-  }, [roomId, toast, currentQuestion, room]);
+  }, [roomId, toast, currentQuestion, room, team]);
 
   if (roomLoading || !room) {
     return (
@@ -328,24 +338,54 @@ export default function GameRoom() {
             {/* PLAYING STATE */}
             {room.status === 'playing' && (
               <div className="flex flex-col items-center gap-8 w-full max-w-2xl">
-                {currentQuestion ? (
-                  <TeamAnswerWithTimer
-                    question={currentQuestion.question}
-                    authorTeam={currentQuestion.authorTeam}
-                    canAnswer={currentQuestion.canAnswer}
-                    selectedPlayerId={currentQuestion.selectedPlayerId}
-                    timeLeft={currentQuestion.timeLeft}
-                    teammates={room.users?.filter(u => u.team === team && u.team !== 'spectator').map(u => ({ userId: u.userId, username: u.user.username })) || []}
-                    currentUserId={user?.id}
-                    currentTeam={team}
-                    onSubmit={handleAnswerSubmit}
-                    onSelectPlayer={handleSelectPlayer}
+                {showSpinner ? (
+                  <TeamSpinner
+                    teams={[
+                      { name: room.redName || 'Red Team', color: 'red' },
+                      { name: room.blueName || 'Blue Team', color: 'blue' },
+                    ]}
+                    onSpinComplete={handleSpinComplete}
+                    disabled={false}
                   />
+                ) : askingTeam ? (
+                  <>
+                    {currentQuestion ? (
+                      <TeamAnswerWithTimer
+                        question={currentQuestion.question}
+                        authorTeam={currentQuestion.authorTeam}
+                        canAnswer={currentQuestion.canAnswer}
+                        selectedPlayerId={currentQuestion.selectedPlayerId}
+                        timeLeft={currentQuestion.timeLeft}
+                        teammates={room.users?.filter(u => u.team === team && u.team !== 'spectator').map(u => ({ userId: u.userId, username: u.user.username })) || []}
+                        currentUserId={user?.id}
+                        currentTeam={team}
+                        onSubmit={handleAnswerSubmit}
+                        onSelectPlayer={handleSelectPlayer}
+                      />
+                    ) : (
+                      <>
+                        {team === askingTeam ? (
+                          <TeamQuestionSetter
+                            currentTeam={team}
+                            onSubmit={handleTeamQuestionSubmit}
+                          />
+                        ) : (
+                          <Card className="bg-card/40 border-white/10">
+                            <CardContent className="p-6 text-center">
+                              <p className="text-muted-foreground">
+                                Waiting for {askingTeam === 'red' ? room.redName || 'Red Team' : room.blueName || 'Blue Team'} to set a question...
+                              </p>
+                            </CardContent>
+                          </Card>
+                        )}
+                      </>
+                    )}
+                  </>
                 ) : (
-                  <TeamQuestionSetter
-                    currentTeam={team}
-                    onSubmit={handleTeamQuestionSubmit}
-                  />
+                  <Button onClick={() => setShowSpinner(true)} size="lg">
+                    <Trophy className="w-5 h-5 mr-2" />
+                    Spin to Choose First Team
+                  </Button>
                 )}
               </div>
             )}

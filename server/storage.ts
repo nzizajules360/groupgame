@@ -14,6 +14,8 @@ export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  deleteUser(id: number): Promise<void>;
+  resetRoomsSequence(): Promise<void>;
 
   createRoom(hostId: number, code: string): Promise<Room>;
   getRoom(id: number): Promise<Room | undefined>;
@@ -49,18 +51,22 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUser(id: number): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.id, id));
+    const [user] = await db.select().from(users).where(eq(users.id, id)).limit(1);
     return user;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.username, username));
+    const [user] = await db.select().from(users).where(eq(users.username, username)).limit(1);
     return user;
   }
 
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const [user] = await db.insert(users).values(insertUser).returning();
-    return user;
+  async createUser(user: InsertUser): Promise<User> {
+    const [newUser] = await db.insert(users).values(user).returning();
+    return newUser;
+  }
+
+  async deleteUser(id: number): Promise<void> {
+    await db.delete(users).where(eq(users.id, id));
   }
 
   async createRoom(hostId: number, code: string): Promise<Room> {
@@ -71,6 +77,15 @@ export class DatabaseStorage implements IStorage {
       currentTeam: "red"
     }).returning();
     return room;
+  }
+
+  // Helper to reset the sequence if duplicate key occurs
+  async resetRoomsSequence(): Promise<void> {
+    try {
+      await db.execute(sql`SELECT setval(pg_get_serial_sequence('rooms', 'id'), COALESCE(MAX(id), 1), MAX(id) IS NOT NULL) FROM rooms`);
+    } catch (e) {
+      console.error("Failed to reset rooms sequence", e);
+    }
   }
 
   async getRoom(id: number): Promise<Room | undefined> {

@@ -20,9 +20,28 @@ export async function registerRoutes(
     if (!userId) return res.sendStatus(401);
     const generateCode = customAlphabet("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ", 6);
     const code = generateCode();
-    const room = await storage.createRoom(userId, code);
-    await storage.addUserToRoom(room.id, userId, true);
-    res.status(201).json(room);
+    try {
+      const room = await storage.createRoom(userId, code);
+      await storage.addUserToRoom(room.id, userId, true);
+      res.status(201).json(room);
+    } catch (e: any) {
+      if (e.code === '23505') {
+        // Duplicate key error: reset sequence and retry once
+        console.warn("Duplicate room ID detected, resetting sequence and retrying...");
+        await storage.resetRoomsSequence();
+        try {
+          const room = await storage.createRoom(userId, code);
+          await storage.addUserToRoom(room.id, userId, true);
+          res.status(201).json(room);
+        } catch (retryErr) {
+          console.error("Retry failed", retryErr);
+          res.status(500).json({ message: "Failed to create room after retry" });
+        }
+      } else {
+        console.error("Create room error", e);
+        res.status(500).json({ message: "Failed to create room" });
+      }
+    }
   });
 
   app.post(api.rooms.join.path, async (req, res) => {
@@ -310,7 +329,22 @@ export async function registerRoutes(
     });
   }
 
-  // Seeding
+  // Delete user account
+app.delete(api.auth.delete.path, async (req, res) => {
+  if (!req.isAuthenticated()) return res.sendStatus(401);
+  const userId = (req.user as { id: number })?.id;
+  if (!userId) return res.sendStatus(401);
+  try {
+    await storage.deleteUser(userId);
+    req.logout((err) => {
+      if (err) return res.sendStatus(500);
+      res.sendStatus(200);
+    });
+  } catch (e) {
+    console.error("Delete user error", e);
+    res.sendStatus(500);
+  }
+});
   if ((await storage.getQuestions()).length === 0) {
     await storage.createQuestion({ text: "What is the capital of France?", answer: "Paris" });
     await storage.createQuestion({ text: "What has keys but can't open locks?", answer: "Piano" });
